@@ -1,6 +1,6 @@
-import React from "react";
+import React, { useState } from "react";
 import { useForm } from "react-hook-form";
-import { NavLink } from "react-router-dom";
+import { NavLink, useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 
@@ -12,8 +12,13 @@ const Signup = () => {
     reset,
   } = useForm();
 
+  const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
+
   const onSubmit = async (data) => {
+    setLoading(true);
     try {
+      // Step 1: Signup
       const response = await fetch(`${import.meta.env.VITE_FETCH_URL}/auth/signup`, {
         method: "POST",
         headers: {
@@ -26,14 +31,51 @@ const Signup = () => {
 
       if (!response.ok) {
         toast.error(result.message || "Signup failed");
+        setLoading(false);
         return;
       }
 
       toast.success("Signup successful!");
+
+      // Step 2: Auto-login
+      const loginData = {
+        email: data.email,
+        password: data.password,
+      };
+
+      const loginResponse = await fetch(`${import.meta.env.VITE_FETCH_URL}/auth/login`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(loginData),
+      });
+
+      const loginResult = await loginResponse.json();
+
+      if (!loginResponse.ok) {
+        toast.error(loginResult.message || "Login failed after signup");
+        setLoading(false);
+        return;
+      }
+
+      // Step 3: Save token and user to localStorage
+      localStorage.setItem("authToken", loginResult.token);
+      localStorage.setItem("user", JSON.stringify(loginResult.user));
+
       reset();
+      
+
+      // Step 4: Redirect
+      setTimeout(() => {
+        navigate("/");
+      }, 1000);
+
     } catch (error) {
       console.error("Network error:", error.message);
       toast.error("Network error. Please try again.");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -78,6 +120,10 @@ const Signup = () => {
                 value: 6,
                 message: "Password must be at least 6 characters",
               },
+              pattern: {
+                value: /^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d@$!%*?&]{6,}$/,
+                message: "Password must contain letters and numbers",
+              },
             })}
             className="w-full p-2 border rounded"
             type="password"
@@ -88,9 +134,10 @@ const Signup = () => {
 
         <button
           type="submit"
-          className="w-full bg-green-600 text-white p-2 rounded hover:bg-green-700"
+          className="w-full bg-green-600 text-white p-2 rounded hover:bg-green-700 disabled:opacity-50"
+          disabled={loading}
         >
-          Signup
+          {loading ? "Processing..." : "Signup"}
         </button>
       </form>
 
